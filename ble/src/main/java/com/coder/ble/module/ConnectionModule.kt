@@ -15,10 +15,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import com.coder.ble.model.ConnectionCallback
-import com.coder.ble.model.ConnectionConfig
-import com.coder.ble.model.ConnectionState
-import com.coder.ble.model.DeviceConnection
+import com.coder.ble.models.ConnectionCallback
+import com.coder.ble.configs.ConnectionConfig
+import com.coder.ble.models.ConnectionState
+import com.coder.ble.models.DeviceConnection
 import java.lang.ref.WeakReference
 import java.util.UUID
 import android.util.Log
@@ -29,7 +29,7 @@ import android.util.Log
  * 管理单个蓝牙设备的连接、数据交换、重连等所有操作。
  * 这个类的实例应该是短暂的，每个连接会话都通过 `BluetoothManager.createDeviceConnection()` 创建一个新的实例。
  *
- * @SuppressLint("MissingPermission") 用于告知编译器，我们已在调用前手动检查了权限。
+ * @SuppressLint("MissingPermission") 用于告知编译器，已在调用前手动检查了权限。
  */
 @SuppressLint("MissingPermission")
 class ConnectionModule internal constructor(
@@ -108,7 +108,11 @@ class ConnectionModule internal constructor(
             }
         }
 
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "[${gatt.device.address}] 特征读取成功: ${characteristic.uuid}")
                 mainHandler.post { callbackRef?.get()?.onCharacteristicRead(characteristic, characteristic.value) }
@@ -117,7 +121,11 @@ class ConnectionModule internal constructor(
             }
         }
 
-        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "[${gatt.device.address}] 特征写入成功: ${characteristic.uuid}")
                 mainHandler.post { callbackRef?.get()?.onCharacteristicWritten(characteristic) }
@@ -127,7 +135,10 @@ class ConnectionModule internal constructor(
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            Log.d(TAG, "[${gatt.device.address}] 收到特征通知: ${characteristic.uuid}, 数据: ${characteristic.value.toHexString()}")
+            Log.d(
+                TAG,
+                "[${gatt.device.address}] 收到特征通知: ${characteristic.uuid}, 数据: ${characteristic.value.toHexString()}"
+            )
             mainHandler.post { callbackRef?.get()?.onCharacteristicChanged(characteristic, characteristic.value) }
         }
     }
@@ -141,8 +152,8 @@ class ConnectionModule internal constructor(
         if (currentState == ConnectionState.CONNECTING || currentState == ConnectionState.CONNECTED) return
 
         if (!hasConnectPermission()) {
-            // 注意：我们没有一个专门的回调来通知权限问题，因为这应该在调用前由 App 解决。
-            // 开发者可以通过 PermissionUtils 自行检查。
+            // 注意：没有专门的回调来通知权限问题，因为这应该在调用前由 App 解决。
+            // 可以通过 PermissionUtils 自行检查。
             Log.w(TAG, "[$macAddress] 调用 connect() 时设备已处于连接中或已连接状态，本次操作忽略。")
             return
         }
@@ -228,7 +239,12 @@ class ConnectionModule internal constructor(
         return readCharacteristic(characteristic)
     }
 
-    override fun writeCharacteristic(serviceUUID: UUID, characteristicUUID: UUID, data: ByteArray, writeType: Int): Boolean {
+    override fun writeCharacteristic(
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
+        data: ByteArray,
+        writeType: Int
+    ): Boolean {
         val characteristic = getCharacteristic(serviceUUID, characteristicUUID) ?: return false
         return writeCharacteristic(characteristic, data, writeType)
     }
@@ -263,7 +279,7 @@ class ConnectionModule internal constructor(
     private fun handleDisconnection() {
         if (isUserDisconnect || !connectionConfig.reconnectionConfig.enabled) {
             Log.i(TAG, "[$macAddress] 连接已断开。原因：用户主动断开或未启用重连。即将关闭GATT。")
-            // 如果是用户主动断开或未开启重连，则彻底关闭
+            // 如果是主动断开或未开启重连，则彻底关闭
             currentState = ConnectionState.DISCONNECTED
             close()
         } else {
@@ -293,7 +309,10 @@ class ConnectionModule internal constructor(
             close()
             return
         }
-        Log.i(TAG, "[$macAddress] 计划在 ${currentReconnectDelay}毫秒 后进行重连。剩余尝试次数: $reconnectionAttemptsLeft")
+        Log.i(
+            TAG,
+            "[$macAddress] 计划在 ${currentReconnectDelay}毫秒 后进行重连。剩余尝试次数: $reconnectionAttemptsLeft"
+        )
         currentState = ConnectionState.RECONNECTING
         mainHandler.postDelayed({
             if (currentState == ConnectionState.RECONNECTING) {
@@ -303,8 +322,9 @@ class ConnectionModule internal constructor(
         }, currentReconnectDelay)
 
         // 更新下一次的延迟
-        currentReconnectDelay = (currentReconnectDelay.toDouble() * connectionConfig.reconnectionConfig.backoffMultiplier).toLong()
-            .coerceAtMost(connectionConfig.reconnectionConfig.maxDelayMillis)
+        currentReconnectDelay =
+            (currentReconnectDelay.toDouble() * connectionConfig.reconnectionConfig.backoffMultiplier).toLong()
+                .coerceAtMost(connectionConfig.reconnectionConfig.maxDelayMillis)
         reconnectionAttemptsLeft--
     }
 
@@ -329,7 +349,11 @@ class ConnectionModule internal constructor(
         return bluetoothGatt?.readCharacteristic(characteristic) ?: false
     }
 
-    private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic, data: ByteArray, writeType: Int): Boolean {
+    private fun writeCharacteristic(
+        characteristic: BluetoothGattCharacteristic,
+        data: ByteArray,
+        writeType: Int
+    ): Boolean {
         characteristic.writeType = writeType
         characteristic.value = data
         return bluetoothGatt?.writeCharacteristic(characteristic) ?: false
@@ -340,7 +364,8 @@ class ConnectionModule internal constructor(
             return false
         }
         val descriptor = characteristic.getDescriptor(CCCD_UUID) ?: return false
-        val value = if (enable) BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE else BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+        val value =
+            if (enable) BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE else BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
         descriptor.value = value
         return bluetoothGatt?.writeDescriptor(descriptor) ?: false
     }

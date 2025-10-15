@@ -27,10 +27,10 @@ class StateModule internal constructor(
      * @return 返回一个 Flow<Boolean>，true 表示蓝牙已开启，false 表示已关闭。
      */
     val bluetoothState: Flow<Boolean> = callbackFlow {
-        // 1. 发送初始状态
+        // 发送初始状态
         trySend(bluetoothAdapter.isEnabled)
 
-        // 2. 创建并注册 BroadcastReceiver
+        // 创建并注册 BroadcastReceiver
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -46,7 +46,7 @@ class StateModule internal constructor(
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
-        // 3. 当 Flow 被取消或关闭时，执行此代码块进行清理
+        // 当 Flow 被取消或关闭时，执行此代码块进行清理
         awaitClose {
             context.unregisterReceiver(receiver)
         }

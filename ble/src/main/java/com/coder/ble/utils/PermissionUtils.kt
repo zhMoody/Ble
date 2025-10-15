@@ -1,4 +1,4 @@
-package com.coder.ble.model
+package com.coder.ble.utils
 
 import android.Manifest
 import android.os.Build

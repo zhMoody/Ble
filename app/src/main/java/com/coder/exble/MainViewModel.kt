@@ -11,13 +11,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coder.ble.BluetoothManager
-import com.coder.ble.model.ConnectionCallback
-import com.coder.ble.model.ConnectionConfig
-import com.coder.ble.model.ConnectionState
-import com.coder.ble.model.DeviceConnection
-import com.coder.ble.model.ScanConfig
-import com.coder.ble.model.ScanFailure
-import com.coder.ble.model.ScanCallback
+import com.coder.ble.models.ConnectionCallback
+import com.coder.ble.configs.ConnectionConfig
+import com.coder.ble.models.ConnectionState
+import com.coder.ble.models.DeviceConnection
+import com.coder.ble.configs.ScanConfig
+import com.coder.ble.models.ScanFailure
+import com.coder.ble.models.ScanCallback
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 

@@ -11,10 +11,10 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.coder.ble.model.PermissionUtils
-import com.coder.ble.model.ScanCallback
-import com.coder.ble.model.ScanConfig
-import com.coder.ble.model.ScanFailure
+import com.coder.ble.utils.PermissionUtils
+import com.coder.ble.models.ScanCallback
+import com.coder.ble.configs.ScanConfig
+import com.coder.ble.models.ScanFailure
 import java.lang.ref.WeakReference
 
 /**
@@ -46,7 +46,10 @@ class ScanModule internal constructor(
                     // --- 核心修改点 ---
                     // 1. 从 ScanRecord 中提取厂商数据
                     val manufacturerData = result.scanRecord?.manufacturerSpecificData
-                    Log.d(TAG, "发现设备: ${device.name} [${device.address}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条")
+                    Log.d(
+                        TAG,
+                        "发现设备: ${device.name} [${device.address}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条"
+                    )
 
                     // 2. 通过更新后的回调方法传递出去
                     scanCallbackRef?.get()?.onDeviceFound(

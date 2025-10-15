@@ -1,4 +1,4 @@
-package com.coder.ble.model
+package com.coder.ble.models
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGattCharacteristic
@@ -12,7 +12,13 @@ import android.util.SparseArray
 interface ScanCallback {
     fun onScanStarted()
     fun onScanStopped()
-    fun onDeviceFound(device: BluetoothDevice, rssi: Int, scanRecord: ByteArray, manufacturerData: SparseArray<ByteArray>?)
+    fun onDeviceFound(
+        device: BluetoothDevice,
+        rssi: Int,
+        scanRecord: ByteArray,
+        manufacturerData: SparseArray<ByteArray>?
+    )
+
     fun onScanFailed(failure: ScanFailure)
 }
 

@@ -1,4 +1,4 @@
-package com.coder.ble.model
+package com.coder.ble.configs
 
 data class ScanConfig(
     val deviceNameFilter: List<String>? = null,

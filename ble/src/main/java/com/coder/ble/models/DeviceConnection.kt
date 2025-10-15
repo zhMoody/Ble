@@ -1,7 +1,8 @@
-package com.coder.ble.model
+package com.coder.ble.models
 
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
+import com.coder.ble.configs.ConnectionConfig
 import java.util.UUID
 
 /**
@@ -28,7 +29,13 @@ interface DeviceConnection {
 
     // --- 显式调用 ---
     fun readCharacteristic(serviceUUID: UUID, characteristicUUID: UUID): Boolean
-    fun writeCharacteristic(serviceUUID: UUID, characteristicUUID: UUID, data: ByteArray, writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT): Boolean
+    fun writeCharacteristic(
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
+        data: ByteArray,
+        writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+    ): Boolean
+
     fun enableNotifications(serviceUUID: UUID, characteristicUUID: UUID): Boolean
     fun disableNotifications(serviceUUID: UUID, characteristicUUID: UUID): Boolean
 }

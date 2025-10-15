@@ -9,7 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import com.coder.ble.model.DeviceConnection
+import com.coder.ble.models.DeviceConnection
 import com.coder.ble.module.ConnectionModule
 import com.coder.ble.module.ScanModule
 import com.coder.ble.module.StateModule
@@ -36,7 +36,8 @@ object BluetoothManager {
      * 只有在第一次被访问时才会初始化。
      */
     private val bluetoothAdapter: BluetoothAdapter? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        val bluetoothManager = applicationContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? AndroidBluetoothManager
+        val bluetoothManager =
+            applicationContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? AndroidBluetoothManager
         bluetoothManager?.adapter
     }
 

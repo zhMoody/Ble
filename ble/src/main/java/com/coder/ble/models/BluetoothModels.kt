@@ -1,5 +1,4 @@
-package com.coder.ble.model
-import android.bluetooth.BluetoothDevice
+package com.coder.ble.models
 
 enum class ConnectionState(val displayName: String) {
     DISCONNECTED("未连接"),
@@ -50,23 +49,4 @@ sealed class ScanFailure {
             }
         }
     }
-}
-/**
- * 封装了扫描发现的蓝牙设备及其所有相关信息。
- *
- * @property device 底层的 Android BluetoothDevice 对象。
- * @property rssi 信号强度。
- * @property manufacturerData 解析后的厂商特定数据。
- *                          Key 是 16 位的公司标识符 (Company ID)。
- *                          Value 是厂商自定义的数据包 (ByteArray)。
- */
-data class BleDevice(
-    val device: BluetoothDevice,
-    val rssi: Int,
-    val manufacturerData: Map<Int, ByteArray>
-) {
-    val name: String?
-        get() = device.name
-    val address: String
-        get() = device.address
 }
