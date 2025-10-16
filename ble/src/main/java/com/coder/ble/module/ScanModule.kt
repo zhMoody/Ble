@@ -16,6 +16,8 @@ import com.coder.ble.models.ScanCallback
 import com.coder.ble.configs.ScanConfig
 import com.coder.ble.models.ScanFailure
 import java.lang.ref.WeakReference
+import com.coder.ble.utils.hexToByteArray
+import com.coder.ble.utils.endsWith
 
 /**
  * 负责蓝牙低功耗（BLE）设备的扫描。
@@ -33,6 +35,9 @@ class ScanModule internal constructor(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isScanning = false
     private var scanCallbackRef: WeakReference<ScanCallback>? = null
+    private var parsedNameFilter: String? = null
+    private var parsedManufacturerDataFilters: List<ByteArray> = emptyList()
+
 
     /**
      * Android 系统底层的扫描回调实现。
@@ -40,25 +45,23 @@ class ScanModule internal constructor(
     private val leScanCallback = object : android.bluetooth.le.ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
-            result?.device?.let { device ->
-                // 过滤掉没有名字的设备，这在很多场景下是必要的
-                if (device.name != null) {
-                    // --- 核心修改点 ---
-                    // 1. 从 ScanRecord 中提取厂商数据
-                    val manufacturerData = result.scanRecord?.manufacturerSpecificData
-                    Log.d(
-                        TAG,
-                        "发现设备: ${device.name} [${device.address}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条"
-                    )
+            result ?: return
+            // 过滤掉没有名字的设备，这在很多场景下是必要的
+            if (matchesCustomFilters(result)) {
+                // 1. 从 ScanRecord 中提取厂商数k据
+                val manufacturerData = result.scanRecord?.manufacturerSpecificData
+                Log.d(
+                    TAG,
+                    "发现设备: ${result.device.name} [${result.device.address}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条"
+                )
 
-                    // 2. 通过更新后的回调方法传递出去
-                    scanCallbackRef?.get()?.onDeviceFound(
-                        device,
-                        result.rssi,
-                        result.scanRecord?.bytes ?: byteArrayOf(),
-                        manufacturerData
-                    )
-                }
+                // 2. 通过更新后的回调方法传递出去
+                scanCallbackRef?.get()?.onDeviceFound(
+                    result.device,
+                    result.rssi,
+                    result.scanRecord?.bytes ?: byteArrayOf(),
+                    manufacturerData
+                )
             }
         }
 
@@ -97,16 +100,16 @@ class ScanModule internal constructor(
             callback.onScanFailed(ScanFailure.BleNotSupported)
             return
         }
-
         this.scanCallbackRef = WeakReference(callback)
-        val filters = buildScanFilters(config.deviceNameFilter)
-        val settings = buildScanSettings()
+        buildScanFilters(config.deviceNameFilter)
 
         isScanning = true
+        val filters: List<ScanFilter>? = null
+        val settings = buildScanSettings()
         bluetoothLeScanner.startScan(filters, settings, leScanCallback)
-        Log.i(TAG, "扫描已正式开始，持续时间: ${config.scanDuration} 毫秒。")
-        callback.onScanStarted()
 
+        callback.onScanStarted()
+        Log.i(TAG, "扫描已正式开始，过滤: ${config.deviceNameFilter}，时长: ${config.scanDuration}ms")
         // 使用 Handler 实现扫描超时自动停止
         mainHandler.postDelayed({
             if (isScanning) {
@@ -124,11 +127,11 @@ class ScanModule internal constructor(
             return
         }
         Log.i(TAG, "用户主动停止扫描。")
+        isScanning = false
         // 停止扫描也需要权限
         if (getMissingPermissions().isEmpty()) {
             bluetoothLeScanner.stopScan(leScanCallback)
         }
-        isScanning = false
         scanCallbackRef?.get()?.onScanStopped()
         // 清理资源，防止内存泄漏
         scanCallbackRef?.clear()
@@ -146,16 +149,58 @@ class ScanModule internal constructor(
 
     /**
      * 根据配置构建用于系统 API 的 ScanFilter 列表。
+     * @param filters 包含过滤条件的字符串列表。
+     * - "MFR:" 前缀 (e.g., "MFR:21"): 按厂商数据后缀过滤 (十六进制)。
      */
-    private fun buildScanFilters(deviceNames: List<String>?): List<ScanFilter> {
-        val filters = mutableListOf<ScanFilter>()
-        deviceNames?.forEach { name ->
-            val filter = ScanFilter.Builder()
-                .setDeviceName(name)
-                .build()
-            filters.add(filter)
+    private fun buildScanFilters(filters: List<String>?) {
+// 每次开始扫描前，先重置旧的过滤器
+        parsedNameFilter = null
+        val manufacturerFilters = mutableListOf<ByteArray>()
+        filters?.forEach { filterString ->
+            if (filterString.startsWith("MFR:", ignoreCase = true)) {
+                // 如果是厂商数据过滤器
+                val hexString = filterString.substring(4)
+                val data = hexString.hexToByteArray()
+                if (data.isNotEmpty()) {
+                    manufacturerFilters.add(data)
+                }
+            } else {
+                parsedNameFilter = filterString
+            }
         }
-        return filters
+
+        parsedManufacturerDataFilters = manufacturerFilters
+    }
+
+    /**
+     * 检查一个扫描结果是否满足我们解析出的自定义过滤器。
+     * 支持厂商数据的 "OR" 逻辑
+     */
+    private fun matchesCustomFilters(result: ScanResult): Boolean {
+        // 检查名称是否匹配
+        val nameMatches = parsedNameFilter?.let { nameSubstring ->
+            result.device.name?.contains(nameSubstring, ignoreCase = true) == true
+        } ?: true
+        // 检查厂商数据是否匹配 (OR 逻辑)
+        val manufacturerDataMatches = if (parsedManufacturerDataFilters.isNotEmpty()) {
+            val manufacturerDataSparseArray = result.scanRecord?.manufacturerSpecificData
+            if (manufacturerDataSparseArray != null && manufacturerDataSparseArray.size() > 0) {
+                // 遍历设备广播的所有厂商数据
+                (0 until manufacturerDataSparseArray.size()).any { i ->
+                    val actualData = manufacturerDataSparseArray.valueAt(i)
+                    // 检查 actualData 的后缀是否匹配我们过滤器列表中的【任何一个】
+                    parsedManufacturerDataFilters.any { filterSuffix ->
+                        actualData.endsWith(filterSuffix)
+                    }
+                }
+            } else {
+                false // 没有厂商数据，无法匹配
+            }
+        } else {
+            true // 如果没有厂商数据过滤器，则认为匹配
+        }
+// 3. 必须同时满足名称和厂商数据的条件
+        return nameMatches && manufacturerDataMatches
     }
 
     /**

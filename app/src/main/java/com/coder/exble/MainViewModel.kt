@@ -41,7 +41,7 @@ class MainViewModel : ViewModel() {
     val connectionState = mutableStateOf(ConnectionState.DISCONNECTED)
     val receivedData = mutableStateOf("")
 
-    // --- 新增状态：用于服务和特征选择 ---
+    // --- 用于服务和特征选择 ---
     val services = mutableStateListOf<BluetoothGattService>()
     val characteristics = mutableStateListOf<BluetoothGattCharacteristic>()
     val selectedService = mutableStateOf<BluetoothGattService?>(null)
@@ -53,12 +53,16 @@ class MainViewModel : ViewModel() {
     fun startScan() {
         if (isScanning.value) return
         devices.clear()
-        isScanning.value = true
-
-        val scanConfig = ScanConfig(scanDuration = 15000L) // 扫描15秒
+        val scanConfig = ScanConfig(
+            scanDuration = 15000L, // 扫描15秒
+            deviceNameFilter = listOf("JL", "MFR:21", "MFR:23")
+        )
 
         scanner.startScan(scanConfig, object : ScanCallback {
-            override fun onScanStarted() {}
+            override fun onScanStarted() {
+                isScanning.value = true
+            }
+
             override fun onScanStopped() {
                 isScanning.value = false
             }

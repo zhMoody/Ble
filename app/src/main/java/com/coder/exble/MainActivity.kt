@@ -15,6 +15,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SignalCellular0Bar
+import androidx.compose.material.icons.filled.SignalCellularAlt1Bar
+import androidx.compose.material.icons.filled.SignalCellularAlt2Bar
+import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,7 +78,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val selectedService by viewModel.selectedService
     val isCharacteristicSelected by viewModel.isCharacteristicSelected
     Scaffold(
-        topBar = { TopAppBar(title = { Text("蓝牙库示例") }) }
+        topBar = { TopAppBar(title = { Text("蓝牙库") }) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             BluetoothStatusCard(isBluetoothEnabled, isScanning) {
@@ -86,10 +91,13 @@ fun MainScreen(viewModel: MainViewModel) {
 
                 when {
                     connectionState == ConnectionState.CONNECTING -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(16.dp))
-                            Text("连接中...")
+                            Text(connectionState.displayName)
                         }
                     }
 
@@ -105,10 +113,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     }
 
-                    // 阶段3: 特征已选择，显示控制面板
+
                     connectionState == ConnectionState.CONNECTED && isCharacteristicSelected -> {
                         DeviceControlPanel(
                             state = connectionState,
+                            scannedDevice = interactingDevice,
                             receivedData = receivedData,
                             onDisconnect = { viewModel.disconnect() },
                             onSend = { viewModel.sendData(it) }
@@ -184,10 +193,17 @@ fun DeviceList(devices: List<ScannedDevice>, onDeviceClick: (ScannedDevice) -> U
             Card(modifier = Modifier.fillMaxWidth().clickable { onDeviceClick(scannedDevice) }) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 显示设备名和地址 (不变)
-                    Text(
-                        text = "${scannedDevice.device.name ?: "未知设备"}\n${scannedDevice.device.address}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${scannedDevice.device.name ?: "未知设备"}\n${scannedDevice.device.address}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RssiStateView(scannedDevice.rssi)
+                    }
                     // --- 新增：显示厂商数据 ---
                     scannedDevice.manufacturerData?.let { data ->
                         if (data.size() > 0) {
@@ -208,6 +224,7 @@ fun DeviceList(devices: List<ScannedDevice>, onDeviceClick: (ScannedDevice) -> U
 @Composable
 fun DeviceControlPanel(
     state: ConnectionState,
+    scannedDevice: ScannedDevice?,
     receivedData: String,
     onDisconnect: () -> Unit,
     onSend: (String) -> Unit
@@ -216,6 +233,16 @@ fun DeviceControlPanel(
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("连接状态: ${state.displayName}", style = MaterialTheme.typography.headlineSmall)
+        scannedDevice?.manufacturerData?.let { data ->
+            if (data.size() > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "厂商数据: ${formatManufacturerData(data)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = receivedData,
@@ -267,4 +294,35 @@ private fun formatManufacturerData(data: SparseArray<ByteArray>): String {
         builder.append("ID: $manufacturerId, 数据: 0x$hexData; ")
     }
     return builder.toString().trimEnd(';', ' ')
+}
+
+@Composable
+private fun getRssiColor(rssi: Int): Color {
+    return when {
+        rssi > -70 -> Color(0xFF00B050) // 强信号 (绿色)
+        rssi > -85 -> Color(0xFFE59400) // 中等信号 (橙色)
+        else -> MaterialTheme.colorScheme.error // 弱信号 (红色)
+    }
+}
+
+@Composable
+fun RssiStateView(rssi: Int) {
+    val icon = when {
+        rssi > -70 -> Icons.Default.SignalCellularAlt // 3格信号, 强
+        rssi > -85 -> Icons.Default.SignalCellularAlt2Bar // 2格信号, 中
+        rssi > -90 -> Icons.Default.SignalCellularAlt1Bar // 1格信号, 弱
+        else -> Icons.Default.SignalCellular0Bar // 0格信号, 极差
+    }
+    Row {
+        Icon(
+            imageVector = icon,
+            contentDescription = "信号强度: $rssi dBm",
+            tint = getRssiColor(rssi)
+        )
+        Text(
+            text = " $rssi dBm",
+            style = MaterialTheme.typography.titleMedium,
+            color = getRssiColor(rssi) // 根据信号强度显示不同颜色
+        )
+    }
 }
