@@ -2,7 +2,6 @@ package com.coder.ble.module
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -22,6 +21,7 @@ import com.coder.ble.models.DeviceConnection
 import java.lang.ref.WeakReference
 import java.util.UUID
 import android.util.Log
+import com.coder.ble.BluetoothManager
 
 /**
  * 实现了 DeviceConnection 接口的核心类。
@@ -34,7 +34,6 @@ import android.util.Log
 @SuppressLint("MissingPermission")
 class ConnectionModule internal constructor(
     private val context: Context,
-    private val bluetoothAdapter: BluetoothAdapter,
     private val macAddress: String
 ) : DeviceConnection {
     private val TAG = "BLE: ConnectionModule"
@@ -70,20 +69,13 @@ class ConnectionModule internal constructor(
             Log.d(TAG, "[${deviceAddress}] 连接状态改变: status=$status, newState=$newState")
             mainHandler.removeCallbacks(connectionTimeoutRunnable) // 移除连接超时
 
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    // 连接成功
-                    Log.i(TAG, "[$deviceAddress] --> GATT 连接成功。")
-                    handleConnectionSuccess(gatt)
-                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    // 断开连接
-                    Log.i(TAG, "[$deviceAddress] --> GATT 连接已断开。")
-                    handleDisconnection()
-                }
+            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                Log.i(TAG, "[$deviceAddress] --> GATT 连接成功。")
+                handleConnectionSuccess(gatt)
             } else {
-                // 发生错误
-                Log.e(TAG, "[$deviceAddress] --> 连接状态改变时发生错误, status: $status")
-                handleConnectionError()
+                // 【所有】其他情况 (断开, 失败, 蓝牙关闭等) 都被视为连接终止
+                Log.w(TAG, "[$deviceAddress] --> GATT 连接终止。 status=$status, newState=$newState")
+                handleConnectionTermination()
             }
         }
 
@@ -161,6 +153,11 @@ class ConnectionModule internal constructor(
         this.connectionConfig = config
         this.callbackRef = WeakReference(callback)
         isUserDisconnect = false
+        val bluetoothAdapter = BluetoothManager.getAdapter()
+        if (bluetoothAdapter == null) {
+            currentState = ConnectionState.FAILED
+            return
+        }
 
         val device = bluetoothAdapter.getRemoteDevice(macAddress)
         currentState = ConnectionState.CONNECTING
@@ -260,6 +257,25 @@ class ConnectionModule internal constructor(
     }
 
     // --- 私有辅助方法 ---
+    private fun handleConnectionTermination() {
+        // 检查是否是【意外】断开并且【需要】重连
+        if (!isUserDisconnect && connectionConfig.reconnectionConfig.enabled) {
+            Log.i(TAG, "[$macAddress] 连接意外终止。即将启动重连程序。")
+            startReconnection()
+        } else {
+            // 否则 (用户主动断开, 无需重连, 或连接失败)，彻底关闭
+            Log.i(TAG, "[$macAddress] 连接彻底终止。即将关闭GATT。")
+            // 在这里设置最终状态，并触发回调
+            if (currentState == ConnectionState.CONNECTING) {
+                // 如果是从连接中状态过来的失败，我们认为是连接失败
+                currentState = ConnectionState.FAILED
+            } else {
+                currentState = ConnectionState.DISCONNECTED
+            }
+            // 最终调用 close 来清理资源
+            close()
+        }
+    }
 
     private fun handleConnectionSuccess(gatt: BluetoothGatt) {
         bluetoothGatt = gatt
@@ -276,23 +292,6 @@ class ConnectionModule internal constructor(
         }
     }
 
-    private fun handleDisconnection() {
-        if (isUserDisconnect || !connectionConfig.reconnectionConfig.enabled) {
-            Log.i(TAG, "[$macAddress] 连接已断开。原因：用户主动断开或未启用重连。即将关闭GATT。")
-            // 如果是主动断开或未开启重连，则彻底关闭
-            currentState = ConnectionState.DISCONNECTED
-            close()
-        } else {
-            Log.i(TAG, "[$macAddress] 连接意外断开。即将启动重连程序。")
-            // 意外断开，开始重连
-            startReconnection()
-        }
-    }
-
-    private fun handleConnectionError() {
-        currentState = ConnectionState.FAILED
-        close()
-    }
 
     private val connectionTimeoutRunnable = Runnable {
         if (currentState == ConnectionState.CONNECTING) {

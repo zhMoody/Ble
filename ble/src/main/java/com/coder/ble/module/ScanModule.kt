@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.coder.ble.BluetoothManager
 import com.coder.ble.utils.PermissionUtils
 import com.coder.ble.models.ScanCallback
 import com.coder.ble.configs.ScanConfig
@@ -28,10 +29,9 @@ import com.coder.ble.utils.endsWith
 @SuppressLint("MissingPermission")
 class ScanModule internal constructor(
     private val context: Context,
-    private val bluetoothAdapter: BluetoothAdapter
 ) {
     private val TAG = "BLE: ScanModule"
-    private val bluetoothLeScanner: BluetoothLeScanner? = bluetoothAdapter.bluetoothLeScanner
+    private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isScanning = false
     private var scanCallbackRef: WeakReference<ScanCallback>? = null
@@ -48,20 +48,23 @@ class ScanModule internal constructor(
             result ?: return
             // 过滤掉没有名字的设备，这在很多场景下是必要的
             if (matchesCustomFilters(result)) {
+                val deviceName = result.device.name
+                val deviceAddress = result.device.address
+                if (deviceName != null) {
+                    val manufacturerData = result.scanRecord?.manufacturerSpecificData
+                    Log.d(
+                        TAG,
+                        "发现设备: $deviceName [${deviceAddress}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条"
+                    )
+                    // 2. 通过更新后的回调方法传递出去
+                    scanCallbackRef?.get()?.onDeviceFound(
+                        result.device,
+                        result.rssi,
+                        result.scanRecord?.bytes ?: byteArrayOf(),
+                        manufacturerData
+                    )
+                }
                 // 1. 从 ScanRecord 中提取厂商数k据
-                val manufacturerData = result.scanRecord?.manufacturerSpecificData
-                Log.d(
-                    TAG,
-                    "发现设备: ${result.device.name} [${result.device.address}] RSSI: ${result.rssi}, 厂商数据: ${manufacturerData?.size() ?: 0} 条"
-                )
-
-                // 2. 通过更新后的回调方法传递出去
-                scanCallbackRef?.get()?.onDeviceFound(
-                    result.device,
-                    result.rssi,
-                    result.scanRecord?.bytes ?: byteArrayOf(),
-                    manufacturerData
-                )
             }
         }
 
@@ -82,6 +85,8 @@ class ScanModule internal constructor(
      */
     fun startScan(config: ScanConfig, callback: ScanCallback) {
         Log.i(TAG, "请求开始扫描...")
+        val bluetoothAdapter = BluetoothManager.getAdapter()
+        val bluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
         if (isScanning) {
             Log.w(TAG, "扫描失败：上一次扫描仍在进行中。")
             callback.onScanFailed(ScanFailure.AlreadyScanning)
@@ -127,10 +132,12 @@ class ScanModule internal constructor(
             return
         }
         Log.i(TAG, "用户主动停止扫描。")
+        val bluetoothAdapter = BluetoothManager.getAdapter()
+        val bluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
         isScanning = false
         // 停止扫描也需要权限
         if (getMissingPermissions().isEmpty()) {
-            bluetoothLeScanner.stopScan(leScanCallback)
+            bluetoothLeScanner?.stopScan(leScanCallback)
         }
         scanCallbackRef?.get()?.onScanStopped()
         // 清理资源，防止内存泄漏

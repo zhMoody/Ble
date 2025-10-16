@@ -140,7 +140,7 @@ object BluetoothManager {
             throw IllegalStateException("Bluetooth is not supported on this device.")
         }
         Log.d(TAG, "获取扫描模块实例。")
-        return ScanModule(applicationContext!!, bluetoothAdapter!!)
+        return ScanModule(applicationContext!!)
     }
 
     /**
@@ -159,7 +159,7 @@ object BluetoothManager {
 
         // 我们将在下一步实现 ConnectionModule
         Log.d(TAG, "为设备 [$macAddress] 创建连接模块实例。")
-        return ConnectionModule(applicationContext!!, bluetoothAdapter!!, macAddress)
+        return ConnectionModule(applicationContext!!, macAddress)
     }
 
     // --- 私有辅助方法 ---
@@ -174,4 +174,13 @@ object BluetoothManager {
             throw IllegalStateException("BluetoothManager must be initialized first. Call BluetoothManager.init(context) in your Application's onCreate method.")
         }
     }
+
+    /**
+     * [新增] 为库内模块提供访问蓝牙适配器的内部方法。
+     */
+    internal fun getAdapter(): BluetoothAdapter? {
+        checkInitialized()
+        return bluetoothAdapter
+    }
+
 }
